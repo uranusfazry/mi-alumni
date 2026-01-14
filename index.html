@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Data Alumni - MIS PANATASAN (v9.2 Dynamic Filter)</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- IMGHIPPO EMBED & ZIP BACKUP FEATURE: Libraries -->
+    <!-- JSZip untuk membuat file ZIP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- FileSaver untuk trigger download -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* Loading Overlay */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #16a34a;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* <!-- PROFESSIONAL WELCOME NOTIFICATION: Custom Animation --> */
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes fadeOutRight {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
+        .toast-enter { animation: slideInRight 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .toast-exit { animation: fadeOutRight 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    </style>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#1e293b', // Slate 800
+                        secondary: '#334155', // Slate 700
+                        accent: '#16a34a', // Green 600 (Nuansa Madrasah)
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased overflow-hidden h-screen flex flex-col">
+
+    <!-- ================= LOADING OVERLAY ================= -->
+    <div id="loadingOverlay" class="fixed inset-0 z-[60] bg-black/70 hidden flex-col items-center justify-center text-white">
+        <div class="loader mb-4"></div>
+        <h3 id="loadingText" class="font-bold text-lg">Memproses...</h3>
+        <p class="text-sm text-slate-300">Mohon tunggu, sedang mengunduh aset remote.</p>
+    </div>
+
+    <!-- <!-- PROFESSIONAL WELCOME NOTIFICATION: Container --> -->
+    <div id="toastContainer" class="fixed top-6 right-6 z-[100] flex flex-col gap-3 pointer-events-none w-full max-w-sm">
+        <!-- Toast elements will be injected here via JS -->
+    </div>
+
+    <!-- ================= AUTH SCREEN ================= -->
+    <div id="authSection" class="fixed inset-0 z-50 bg-slate-900 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden fade-in">
+            <div class="bg-primary p-6 text-center border-b-4 border-accent">
+                <i class="ph ph-graduation-cap text-5xl text-accent mb-2"></i>
+                <h1 class="text-xl font-bold text-white uppercase tracking-wide">MIS PANATASAN</h1>
+                <p class="text-slate-400 text-xs mt-1">NPSN: 60710141 | NSM: 111232790008</p>
+                <p class="text-slate-400 text-sm mt-2">Sistem Informasi Alumni & Arsip Digital</p>
+            </div>
+            <div class="p-8">
+                <div class="flex border-b border-slate-200 mb-6">
+                    <button onclick="switchAuthTab('admin')" id="tabAdmin" class="w-1/2 pb-2 border-b-2 border-accent font-medium text-accent transition">Admin</button>
+                    <button onclick="switchAuthTab('guest')" id="tabGuest" class="w-1/2 pb-2 border-b-2 border-transparent text-slate-500 hover:text-slate-700 transition">Tamu / Publik</button>
+                </div>
+
+                <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Username</label>
+                        <input type="text" id="username" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none" placeholder="uranusfazry">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                        <input type="password" id="password" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-accent outline-none" placeholder="••••••">
+                    </div>
+                    <button type="submit" class="w-full bg-primary hover:bg-slate-800 text-white py-2.5 rounded-lg font-medium transition shadow-lg">Masuk Sistem</button>
+                </form>
+
+                <div id="guestAction" class="hidden mt-4">
+                    <p class="text-sm text-slate-600 mb-4 text-center">Akses data alumni MIS PANATASAN (Mode Baca Saja).</p>
+                    <button onclick="enterAsGuest()" class="w-full bg-slate-200 hover:bg-slate-300 text-slate-800 py-2.5 rounded-lg font-medium transition">Masuk Sebagai Tamu</button>
+                </div>
+            </div>
+            <div class="bg-slate-50 p-4 text-center text-[10px] text-slate-400">
+                System Version: v9.2 (Dynamic Filter)
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MAIN APP ================= -->
+    <div id="appSection" class="hidden flex-1 flex overflow-hidden">
+        
+        <!-- Sidebar -->
+        <aside class="w-64 bg-primary text-white hidden md:flex flex-col shadow-xl z-20">
+            <div class="p-6 border-b border-slate-700 flex flex-col gap-1">
+                <div class="flex items-center gap-3">
+                    <i class="ph ph-mosque text-2xl text-accent"></i>
+                    <span class="font-bold text-lg leading-tight tracking-tight">MIS PANATASAN</span>
+                </div>
+                <div class="text-[10px] text-slate-400 mt-1 pl-9">
+                    NPSN: 60710141<br>
+                    NSM: 111232790008
+                </div>
+            </div>
+            
+            <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
+                <button onclick="showPage('dashboard')" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-800 transition text-slate-300 hover:text-white bg-slate-800 text-white">
+                    <i class="ph ph-squares-four text-xl"></i> Dashboard
+                </button>
+                <button onclick="showPage('alumni')" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-800 transition text-slate-300 hover:text-white">
+                    <i class="ph ph-student text-xl"></i> Data Alumni
+                </button>
+                <div class="pt-4 mt-4 border-t border-slate-700 admin-only">
+                    <p class="px-4 text-[10px] uppercase text-slate-500 font-semibold mb-2">Admin Tools</p>
+                    <button onclick="showPage('settings')" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-slate-800 transition text-slate-300 hover:text-white">
+                        <i class="ph ph-database text-xl"></i> Backup & Restore
+                    </button>
+                </div>
+            </nav>
+
+            <div class="p-4 border-t border-slate-700">
+                <div class="mb-3 px-2">
+                    <p class="text-xs text-slate-400">Role Anda:</p>
+                    <p id="roleLabelSidebar" class="font-bold text-accent text-sm">Administrator</p>
+                </div>
+                <button onclick="logout()" class="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg transition text-sm">
+                    <i class="ph ph-sign-out text-lg"></i> Keluar
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 flex flex-col bg-slate-100 overflow-hidden relative">
+            
+            <!-- Mobile Header -->
+            <header class="bg-white shadow-sm p-4 flex md:hidden items-center justify-between z-20">
+                <div class="flex items-center gap-2">
+                    <i class="ph ph-mosque text-2xl text-primary"></i>
+                    <span class="font-bold text-primary">MIS PANATASAN</span>
+                </div>
+                <button onclick="document.getElementById('mobileMenu').classList.toggle('hidden')" class="p-2 text-slate-600">
+                    <i class="ph ph-list text-2xl"></i>
+                </button>
+            </header>
+            <div id="mobileMenu" class="hidden absolute top-16 left-0 w-full bg-primary text-white z-30 shadow-xl p-4 md:hidden">
+                <nav class="space-y-2">
+                    <button onclick="showPage('dashboard'); toggleMobileMenu()" class="block w-full text-left p-3 rounded hover:bg-slate-800">Dashboard</button>
+                    <button onclick="showPage('alumni'); toggleMobileMenu()" class="block w-full text-left p-3 rounded hover:bg-slate-800">Data Alumni</button>
+                    <button onclick="logout()" class="block w-full text-left p-3 rounded bg-red-600 mt-2">Keluar</button>
+                </nav>
+            </div>
+
+            <!-- Content Container -->
+            <div class="flex-1 overflow-y-auto p-4 md:p-8">
+                
+                <!-- PAGE: DASHBOARD -->
+                <div id="page-dashboard" class="page-content fade-in space-y-6">
+                    <div class="flex justify-between items-end">
+                        <div>
+                            <h2 class="text-2xl font-bold text-slate-800">Dashboard Sekolah</h2>
+                            <p class="text-sm text-slate-500">Statistik Data Alumni MIS PANATASAN</p>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                        <div class="bg-white p-5 rounded-xl shadow-sm border-l-4 border-accent">
+                            <p class="text-xs font-bold uppercase text-slate-400 mb-1">Total Alumni</p>
+                            <h3 id="statTotal" class="text-2xl font-bold text-slate-800">0</h3>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl shadow-sm border-l-4 border-blue-300">
+                            <p class="text-xs font-bold uppercase text-slate-400 mb-1">2020/2021</p>
+                            <h3 id="stat2021" class="text-2xl font-bold text-slate-800">0</h3>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl shadow-sm border-l-4 border-blue-400">
+                            <p class="text-xs font-bold uppercase text-slate-400 mb-1">2021/2022</p>
+                            <h3 id="stat2122" class="text-2xl font-bold text-slate-800">0</h3>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl shadow-sm border-l-4 border-blue-500">
+                            <p class="text-xs font-bold uppercase text-slate-400 mb-1">2022/2023</p>
+                            <h3 id="stat2223" class="text-2xl font-bold text-slate-800">0</h3>
+                        </div>
+                        <div class="bg-white p-5 rounded-xl shadow-sm border-l-4 border-blue-600">
+                            <p class="text-xs font-bold uppercase text-slate-400 mb-1">2023/2024</p>
+                            <h3 id="stat2324" class="text-2xl font-bold text-slate-800">0</h3>
+                        </div>
+                         <div class="bg-white p-5 rounded-xl shadow-sm border-l-4 border-blue-700">
+                            <p class="text-xs font-bold uppercase text-slate-400 mb-1">2024/2025</p>
+                            <h3 id="stat2425" class="text-2xl font-bold text-slate-800">0</h3>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <h3 class="font-bold text-lg mb-4 text-slate-800">Info Lembaga</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                            <div class="flex justify-between border-b py-2"><span>Nama Lembaga:</span> <span class="font-semibold">MIS PANATASAN</span></div>
+                            <div class="flex justify-between border-b py-2"><span>NSM:</span> <span class="font-mono">111232790008</span></div>
+                            <div class="flex justify-between border-b py-2"><span>NPSN:</span> <span class="font-mono">60710141</span></div>
+                            <div class="flex justify-between border-b py-2"><span>Status Database:</span> <span class="bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs">Aktif - v9.2 Dynamic Filter</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PAGE: LIST DATA -->
+                <div id="page-list" class="page-content hidden fade-in flex flex-col h-full">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                        <div>
+                            <h2 id="listTitle" class="text-2xl font-bold text-slate-800">Database Alumni</h2>
+                            <p class="text-sm text-slate-500">Manajemen Data & Arsip Digital</p>
+                        </div>
+                        <button onclick="openModal()" class="admin-only bg-primary hover:bg-slate-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow transition text-sm">
+                            <i class="ph ph-plus-bold"></i> Tambah Data
+                        </button>
+                    </div>
+
+                    <!-- Search & Filter -->
+                    <div class="bg-white p-4 rounded-xl shadow-sm mb-4 flex flex-col md:flex-row gap-4">
+                        <div class="relative flex-1">
+                            <i class="ph ph-magnifying-glass absolute left-3 top-3 text-slate-400"></i>
+                            <input type="text" id="searchInput" onkeyup="renderTable()" placeholder="Cari Nama, NISN, atau NIK..." class="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-accent text-sm">
+                        </div>
+                        <!-- DYNAMIC SCHOOL YEAR FILTER: Replaced hardcoded options with empty select -->
+                        <select id="filterYear" onchange="renderTable()" class="px-4 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:border-accent outline-none">
+                            <option value="">Semua Tahun Ajaran</option>
+                            <!-- Options will be populated via JS -->
+                        </select>
+                        <select id="sortOption" onchange="renderTable()" class="px-4 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:border-accent outline-none">
+                            <option value="name_asc">Nama (A-Z)</option>
+                            <option value="name_desc">Nama (Z-A)</option>
+                            <option value="nis_asc">NISN (Kecil-Besar)</option>
+                        </select>
+                    </div>
+
+                    <!-- Table -->
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex-1 flex flex-col">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse min-w-[900px]">
+                                <thead class="bg-slate-50 text-slate-600 text-xs uppercase font-semibold">
+                                    <tr>
+                                        <th class="p-4 border-b w-10">No</th>
+                                        <th class="p-4 border-b">Nama Lengkap</th>
+                                        <th class="p-4 border-b">Identitas (NISN / NIK)</th>
+                                        <th class="p-4 border-b">Tempat, Tgl Lahir</th>
+                                        <th class="p-4 border-b text-center">Tahun Ajaran</th>
+                                        <th class="p-4 border-b text-center">Arsip</th>
+                                        <th class="p-4 border-b text-right">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tableBody" class="text-sm divide-y divide-slate-100">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="emptyState" class="hidden flex-1 flex flex-col items-center justify-center p-8 text-center">
+                            <i class="ph ph-folder-notch-open text-4xl text-slate-300 mb-2"></i>
+                            <p class="text-slate-500 text-sm">Data tidak ditemukan.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PAGE: SETTINGS -->
+                <div id="page-settings" class="page-content hidden fade-in max-w-2xl mx-auto">
+                    <h2 class="text-2xl font-bold text-slate-800 mb-6">Backup & Restore Data</h2>
+                    
+                    <div class="bg-white rounded-xl shadow-sm p-6 mb-4 border-l-4 border-green-500">
+                        <h3 class="font-bold text-lg mb-2">Backup Lengkap (ZIP)</h3>
+                        <p class="text-sm text-slate-500 mb-4">Unduh arsip lengkap dalam satu file ZIP. Sistem akan mencoba mengunduh file remote dan memasukkannya ke dalam struktur folder <code>uranusfazry.zip</code>.</p>
+                        <button onclick="backupToZip()" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 flex items-center gap-2">
+                            <i class="ph ph-file-zip text-lg"></i> Backup Arsip (uranusfazry.zip)
+                        </button>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-yellow-500">
+                        <h3 class="font-bold text-lg mb-2">Restore dari ZIP</h3>
+                        <p class="text-sm text-slate-500 mb-4">Upload file <code>uranusfazry.zip</code> untuk mengembalikan data dan referensi file.</p>
+                        <div class="flex gap-2 items-center">
+                            <input type="file" id="restoreZipFile" accept=".zip" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-yellow-50 file:text-yellow-700 hover:file:bg-yellow-100"/>
+                            <button onclick="restoreFromZip()" class="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap flex items-center gap-2">
+                                <i class="ph ph-arrows-clockwise"></i> Restore
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- ================= ADD/EDIT MODAL FORM ================= -->
+    <div id="modalForm" class="fixed inset-0 z-50 bg-black/60 hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto fade-in">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
+                <div class="flex items-center gap-2">
+                    <div class="bg-accent/10 p-2 rounded-lg text-accent"><i class="ph ph-student text-xl"></i></div>
+                    <h3 id="modalTitle" class="font-bold text-lg text-slate-800">Formulir Data</h3>
+                </div>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-red-500 transition"><i class="ph ph-x text-2xl"></i></button>
+            </div>
+            
+            <form id="dataForm" onsubmit="saveData(event)" class="p-6 space-y-6">
+                <input type="hidden" id="editId">
+                
+                <!-- Section 1: Identitas Utama -->
+                <div>
+                    <h4 class="text-xs uppercase font-bold text-slate-400 mb-3 tracking-wider">Identitas Utama</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Nama Lengkap</label>
+                            <input type="text" id="inpName" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-accent focus:border-accent uppercase" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">NISN</label>
+                            <input type="text" id="inpNis" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-accent focus:border-accent font-mono" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">NIK</label>
+                            <input type="text" id="inpNik" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-accent focus:border-accent font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Tempat Lahir</label>
+                            <input type="text" id="inpBirthPlace" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-accent focus:border-accent uppercase">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Tanggal Lahir</label>
+                            <input type="date" id="inpBirthDate" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-accent focus:border-accent">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 2: Akademik -->
+                <div class="border-t border-slate-100 pt-4">
+                    <h4 class="text-xs uppercase font-bold text-slate-400 mb-3 tracking-wider">Data Akademik</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                            <input type="text" id="inpStatus" value="Alumni" readonly class="w-full px-3 py-2 border border-slate-200 bg-slate-100 text-slate-500 rounded-lg">
+                        </div>
+                        <div class="md:col-span-2">
+                            <!-- LINK ONLY & CUSTOM SCHOOL YEAR FEATURE -->
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Tahun Ajaran</label>
+                            <input type="text" id="inpSchoolYear" placeholder="Contoh: 2000, 1999/2000, 2010-2011" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-accent focus:border-accent" required>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- LINK ONLY & CUSTOM SCHOOL YEAR FEATURE: MANUAL INPUT -->
+                <div class="border-t border-slate-100 pt-4">
+                    <h4 class="text-xs uppercase font-bold text-slate-400 mb-3 tracking-wider">Arsip Digital (Link Saja)</h4>
+                    
+                    <div class="space-y-4">
+                        <!-- IJAZAH -->
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">1. Ijazah (Wajib)</label>
+                            <input type="text" id="urlIjazah" placeholder="https://..." class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:border-accent outline-none">
+                        </div>
+
+                        <!-- SK -->
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">2. SK / SKL</label>
+                            <input type="text" id="urlSK" placeholder="https://..." class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:border-accent outline-none">
+                        </div>
+
+                        <!-- SKL -->
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">3. SKL (Opsional)</label>
+                            <input type="text" id="urlSKL" placeholder="https://..." class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:border-accent outline-none">
+                        </div>
+
+                        <!-- TRANSKRIP -->
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">4. Transkrip Nilai (Opsional)</label>
+                            <input type="text" id="urlTranskrip" placeholder="https://..." class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:border-accent outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-4 flex justify-end gap-3 border-t border-slate-100 mt-2">
+                    <button type="button" onclick="closeModal()" class="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition">Batal</button>
+                    <button type="submit" class="px-5 py-2.5 bg-primary hover:bg-slate-800 text-white rounded-lg font-medium transition shadow-lg flex items-center gap-2"><i class="ph ph-floppy-disk"></i> Simpan Data</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- IMGHIPPO EMBED & ZIP BACKUP FEATURE: PREVIEW MODAL -->
+    <div id="previewModal" class="fixed inset-0 z-[55] bg-black/80 hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col fade-in">
+            <div class="p-4 border-b border-slate-100 flex justify-between items-center">
+                <h3 id="previewTitle" class="font-bold text-lg text-slate-800">Preview Dokumen</h3>
+                <div class="flex gap-2">
+                    <a id="downloadBtn" href="#" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-sm flex items-center gap-1">
+                        <i class="ph ph-download-simple"></i> Download
+                    </a>
+                    <button onclick="closePreview()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1.5 rounded text-sm">
+                        <i class="ph ph-x"></i> Tutup
+                    </button>
+                </div>
+            </div>
+            <div class="flex-1 bg-slate-100 p-4 overflow-hidden flex items-center justify-center relative">
+                <div id="previewContent" class="w-full h-full flex items-center justify-center">
+                    <!-- Dynamic Content -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= JAVASCRIPT LOGIC ================= -->
+    <script>
+        // --- DATA SEEDING (FULL DATA) ---
+        const seedDataList = [
+             // 2020/2021
+            { name: "AJI FAHRIZA", nis: "0089534450", nik: "3279022306080003", birthPlace: "BANJAR", birthDate: "2008-06-23", schoolYear: "2020/2021" },
+            { name: "ASEP HILMAN HAMDANI", nis: "3092721986", nik: "3279023101090001", birthPlace: "BANJAR", birthDate: "2009-01-31", schoolYear: "2020/2021" },
+            { name: "BRIYAN ANDIKA", nis: "3093305701", nik: "3279022804090002", birthPlace: "BANJAR", birthDate: "2009-04-28", schoolYear: "2020/2021" },
+            { name: "GUGUN GUNAWAN", nis: "3088021038", nik: "3279020605080005", birthPlace: "BANJAR", birthDate: "2008-05-06", schoolYear: "2020/2021" },
+            { name: "LINDA PUJI ASTUTI", nis: "0088693852", nik: "3279025107080001", birthPlace: "BANJAR", birthDate: "2008-07-11", schoolYear: "2020/2021" },
+            { name: "MUHAMAD FAIZ MUHAROM", nis: "0083505326", nik: "3207082001080002", birthPlace: "CIAMIS", birthDate: "2008-01-20", schoolYear: "2020/2021" },
+            { name: "MUHAMMAD FAHRI FATHURRAHMAN", nis: "3094180125", nik: "3279022602090001", birthPlace: "BANJAR", birthDate: "2009-02-26", schoolYear: "2020/2021" },
+            { name: "NURRACHMANI HADI PUTRI", nis: "3085135128", nik: "3279025709080003", birthPlace: "BANJAR", birthDate: "2008-09-17", schoolYear: "2020/2021" },
+            { name: "RAFI AMARULLOH", nis: "3089508353", nik: "3279022901090002", birthPlace: "BANJAR", birthDate: "2009-01-29", schoolYear: "2020/2021" },
+            { name: "RAHMA NURHALIMAH", nis: "3092811759", nik: "3279026302080001", birthPlace: "BANJAR", birthDate: "2008-03-23", schoolYear: "2020/2021" },
+            { name: "REGITA YULIAWATI", nis: "0086047101", nik: "3279024412080002", birthPlace: "BANJAR", birthDate: "2008-12-04", schoolYear: "2020/2021" },
+
+            // 2021/2022
+            { name: "SAMILA NUR ALISA", nis: "3103795025", nik: "3279025804100002", birthPlace: "BANJAR", birthDate: "2010-04-18", schoolYear: "2021/2022" },
+            { name: "MUHAMAD AQIS EFENDI", nis: "3109282484", nik: "3279020903100001", birthPlace: "MALAYSIA", birthDate: "2010-03-09", schoolYear: "2021/2022" },
+            { name: "SHAFA SYAHIDA", nis: "3091814166", nik: "3279025902100002", birthPlace: "BANJAR", birthDate: "2010-02-19", schoolYear: "2021/2022" },
+            { name: "HANY JULIANA", nis: "3101033998", nik: "3279024901100001", birthPlace: "BANJAR", birthDate: "2010-01-09", schoolYear: "2021/2022" },
+            { name: "NADIRA RAMADINA AGUSTIN", nis: "3092788642", nik: "3279026709900002", birthPlace: "BANJAR", birthDate: "2009-09-27", schoolYear: "2021/2022" },
+            { name: "NUR CHIKA ROHDIANA", nis: "3096850246", nik: "3279026212090002", birthPlace: "BANJAR", birthDate: "2009-12-22", schoolYear: "2021/2022" },
+            { name: "SITI MARYAM", nis: "3094067124", nik: "3279025703900002", birthPlace: "BANJAR", birthDate: "2009-03-17", schoolYear: "2021/2022" },
+            { name: "RYANA OKTAPIAN PUTRA", nis: "0095175865", nik: "3279012510900002", birthPlace: "BANJAR", birthDate: "2009-10-25", schoolYear: "2021/2022" },
+            { name: "SYAIFUL AKBAR", nis: "0096209149", nik: "3279012208090001", birthPlace: "BANJAR", birthDate: "2009-08-22", schoolYear: "2021/2022" },
+            { name: "ZAHRA NURHASANAH", nis: "3090636099", nik: "3279025909090001", birthPlace: "BANJAR", birthDate: "2009-09-19", schoolYear: "2021/2022" },
+            { name: "IMAN NURROHMAN", nis: "0092150744", nik: "3207112710090001", birthPlace: "CIAMIS", birthDate: "2009-10-27", schoolYear: "2021/2022" },
+            { name: "KAPA GILANG SUBANGKIT", nis: "3106037523", nik: "3279022305100001", birthPlace: "BANJAR", birthDate: "2010-05-23", schoolYear: "2021/2022" },
+            { name: "LINDA", nis: "3094036094", nik: "3279026510090002", birthPlace: "BANJAR", birthDate: "2009-10-25", schoolYear: "2021/2022" },
+
+            // 2022/2023
+            { name: "NOVIA AYU TRESNA", nis: "3106149535", nik: "3279025407100002", birthPlace: "BANJAR", birthDate: "2010-07-14", schoolYear: "2022/2023" },
+            { name: "NAZAR HANAYA", nis: "3103505211", nik: "3207222111100002", birthPlace: "CIAMIS", birthDate: "2010-11-21", schoolYear: "2022/2023" },
+            { name: "ANANDA MAULIDA PUTRI", nis: "3117364921", nik: "3279024703110001", birthPlace: "MADURA", birthDate: "2011-03-07", schoolYear: "2022/2023" },
+            { name: "RIMA LAILA MAHROZA", nis: "3100715721", nik: "3279024906100001", birthPlace: "BANJAR", birthDate: "2010-06-09", schoolYear: "2022/2023" },
+            { name: "NAJWA FEBRA SYAFIQAH", nis: "0113625853", nik: "3279026002110001", birthPlace: "BANJAR", birthDate: "2011-02-20", schoolYear: "2022/2023" },
+            { name: "KARNILAH", nis: "3110559883", nik: "3279024408110001", birthPlace: "BANJAR", birthDate: "2011-08-04", schoolYear: "2022/2023" },
+            { name: "RIZAL", nis: "3112133116", nik: "3279021303110001", birthPlace: "BANJAR", birthDate: "2011-03-13", schoolYear: "2022/2023" },
+            { name: "AGUS WILI RAMDANI", nis: "3103157535", nik: "3279020108100001", birthPlace: "BANJAR", birthDate: "2010-08-01", schoolYear: "2022/2023" },
+            
+            // 2023/2024
+            { name: "NUR KHOLIS WAHID", nis: "3126728075", nik: "3279022101120003", birthPlace: "BANJAR", birthDate: "2012-01-21", schoolYear: "2023/2024" },
+            { name: "ARDIAN SATRIA PUTRA", nis: "3112859517", nik: "3279022205120002", birthPlace: "BANJAR", birthDate: "2012-05-22", schoolYear: "2023/2024" },
+            { name: "RHAYNA TSALSA ALMIRA", nis: "3128152062", nik: "3279025704120002", birthPlace: "BANJAR", birthDate: "2012-04-17", schoolYear: "2023/2024" },
+            { name: "TINA AGUSTINA", nis: "3113117547", nik: "3279024808110002", birthPlace: "BANJAR", birthDate: "2011-08-08", schoolYear: "2023/2024" },
+            { name: "PAZILLA NURRAYSA", nis: "3120192436", nik: "3279025707120003", birthPlace: "BANJAR", birthDate: "2012-07-17", schoolYear: "2023/2024" },
+            { name: "RISKA NAPISA", nis: "3123717420", nik: "3279026102120001", birthPlace: "BANJAR", birthDate: "2012-02-21", schoolYear: "2023/2024" },
+            { name: "HERDI HERDIAN", nis: "3186881542", nik: "3279021204110001", birthPlace: "BANJAR", birthDate: "2011-04-12", schoolYear: "2023/2024" },
+            { name: "ANTONI ALIYASIN", nis: "0113997699", nik: "3279022507110002", birthPlace: "CIAMIS", birthDate: "2011-07-25", schoolYear: "2023/2024" },
+            { name: "EKI SAEPUL ROHMAN", nis: "3129218957", nik: "3279020101120001", birthPlace: "BANJAR", birthDate: "2012-01-01", schoolYear: "2023/2024" },
+            { name: "MEYSA FITRIANI", nis: "3114628217", nik: "3279025705110001", birthPlace: "BANJAR", birthDate: "2011-05-17", schoolYear: "2023/2024" },
+            { name: "ZIAN RAMADHAN", nis: "3110643247", nik: "3279011608110001", birthPlace: "BANJAR", birthDate: "2011-08-16", schoolYear: "2023/2024" },
+            { name: "DZAKI FACHRURRAZI", nis: "3119722254", nik: "3279020909110001", birthPlace: "BANJAR", birthDate: "2011-09-09", schoolYear: "2023/2024" },
+            { name: "FAUZAN AHMAD PUADI", nis: "3112140280", nik: "3279020309110002", birthPlace: "BANJAR", birthDate: "2011-09-03", schoolYear: "2023/2024" },
+            { name: "SITA NURHAYATI", nis: "3119184477", nik: "3279026610110001", birthPlace: "BANJAR", birthDate: "2011-10-26", schoolYear: "2023/2024" },
+            { name: "DENDRA YOGASWARA", nis: "3112286589", nik: "3279021710110002", birthPlace: "BANJAR", birthDate: "2011-10-17", schoolYear: "2023/2024" },
+            { name: "ALYA AINUNNISA", nis: "3124645537", nik: "3279026704120001", birthPlace: "BANJAR", birthDate: "2012-04-27", schoolYear: "2023/2024" },
+            { name: "KAYLA DANI FIDELA", nis: "3125199489", nik: "3279024403120001", birthPlace: "BANJAR", birthDate: "2012-03-04", schoolYear: "2023/2024" },
+            { name: "WINDA NUR ASANI", nis: "3121786137", nik: "3279025703120002", birthPlace: "BANJAR", birthDate: "2012-03-17", schoolYear: "2023/2024" },
+            { name: "FLORA OKTAVIA", nis: "3116504206", nik: "3279026610110002", birthPlace: "BANJAR", birthDate: "2011-10-26", schoolYear: "2023/2024" },
+            { name: "EGI SEPTIAN", nis: "0116445033", nik: "3279021209110003", birthPlace: "BANJAR", birthDate: "2011-09-12", schoolYear: "2023/2024" },
+            { name: "ADE NAZAR JULIANA", nis: "0103647816", nik: "3279021707100001", birthPlace: "BANJAR", birthDate: "2010-07-17", schoolYear: "2023/2024" },
+
+            // 2024/2025
+            { name: "SEPTIAN NUGRAHA", nis: "0125646380", nik: "3279021211120002", birthPlace: "BANJAR", birthDate: "2012-11-12", schoolYear: "2024/2025" },
+            { name: "VIYANKHA NURHALIPAH", nis: "3149908254", nik: "3279024101140002", birthPlace: "BANJAR", birthDate: "2014-01-01", schoolYear: "2024/2025" },
+            { name: "DILA NURPARIDA", nis: "0124015386", nik: "3279025008120004", birthPlace: "BANJAR", birthDate: "2012-08-10", schoolYear: "2024/2025" },
+            { name: "SILVI RISTIANI", nis: "0127707871", nik: "3279024304120002", birthPlace: "BANJAR", birthDate: "2012-04-03", schoolYear: "2024/2025" },
+            { name: "SRI CHINTA WATI", nis: "0134203224", nik: "3279026901130001", birthPlace: "BANJAR", birthDate: "2013-01-29", schoolYear: "2024/2025" },
+            { name: "CITRA WULANDARI", nis: "0136388508", nik: "3279027004130001", birthPlace: "BANJAR", birthDate: "2013-04-30", schoolYear: "2024/2025" },
+            
+            // <!-- IMGHIPPO EMBED & ZIP BACKUP FEATURE: DATA SAMPLE -->
+            { 
+                name: "RENATA SEPTIANI", 
+                nis: "0121529583", 
+                nik: "3279026109120001", 
+                birthPlace: "BANJAR", 
+                birthDate: "2012-09-21", 
+                schoolYear: "2024/2025",
+                files: {
+                    ijazah: { type: "imghippo", url: "https://i.imghippo.com/files/spl6723yMk.jpg" },
+                    sk: { type: "imghippo", url: "https://i.imghippo.com/files/lIO4887SE.jpg" }
+                }
+            },
+            
+            { name: "RISMA YULIANTI", nis: "0129048308", nik: "3279025209120001", birthPlace: "BANJAR", birthDate: "2012-09-12", schoolYear: "2024/2025" },
+            { name: "MUHAMAD RIEFKY PAUZAN", nis: "3127974274", nik: "3327030910120003", birthPlace: "DEPOK", birthDate: "2012-10-09", schoolYear: "2024/2025" },
+            { name: "RIDA NURAIDA SUPRIATNA PUTRI", nis: "3137897340", nik: "3279026703130001", birthPlace: "BANJAR", birthDate: "2013-03-27", schoolYear: "2024/2025" },
+            { name: "DUDI NUGRAHA", nis: "3126840991", nik: "3207152402120001", birthPlace: "CIAMIS", birthDate: "2012-02-24", schoolYear: "2024/2025" },
+            { name: "ZAFEERA MAULIDA HURIYATUNISA AL RASYID", nis: "3139170532", nik: "3279014102130001", birthPlace: "BANJAR", birthDate: "2013-02-01", schoolYear: "2024/2025" }
+        ];
+
+        // --- STATE MANAGEMENT (V9) ---
+        const DB_KEY = 'misPanatasan_db_v9';
+        
+        let db = JSON.parse(localStorage.getItem(DB_KEY)) || {
+            students: [],
+            lastUpdated: new Date().toISOString()
+        };
+
+        // <!-- DYNAMIC SCHOOL YEAR FILTER: Function -->
+        function populateYearFilter() {
+            const select = document.getElementById('filterYear');
+            if (!select) return;
+
+            // Get current selection to preserve it if possible
+            const currentVal = select.value;
+
+            // Extract unique years
+            const years = [...new Set(db.students.map(s => s.schoolYear).filter(y => y))].sort();
+
+            // Clear and add default
+            select.innerHTML = '<option value="">Semua Tahun Ajaran</option>';
+
+            // Add options
+            years.forEach(year => {
+                const opt = document.createElement('option');
+                opt.value = year;
+                opt.textContent = year;
+                select.appendChild(opt);
+            });
+
+            // Restore selection if it still exists
+            if (years.includes(currentVal)) {
+                select.value = currentVal;
+            }
+        }
+
+        if (db.students.length === 0) {
+            console.log("Database V9 kosong. Mengisi data alumni otomatis...");
+            seedDataList.forEach((item, index) => {
+                db.students.push({
+                    id: Date.now().toString() + index,
+                    status: 'Alumni',
+                    nis: item.nis,
+                    nik: item.nik,
+                    name: item.name,
+                    birthPlace: item.birthPlace,
+                    birthDate: item.birthDate,
+                    schoolYear: item.schoolYear,
+                    files: item.files || {} 
+                });
+            });
+            localStorage.setItem(DB_KEY, JSON.stringify(db));
+        }
+        
+        // <!-- DYNAMIC SCHOOL YEAR FILTER: Call on init -->
+        populateYearFilter();
+
+        let currentUser = null; 
+        let currentView = 'alumni'; 
+
+        // --- AUTH & NAV (UNCHANGED) ---
+        function switchAuthTab(type) {
+            const form = document.getElementById('loginForm');
+            const guest = document.getElementById('guestAction');
+            const tabAdmin = document.getElementById('tabAdmin');
+            const tabGuest = document.getElementById('tabGuest');
+
+            if (type === 'admin') {
+                form.classList.remove('hidden');
+                guest.classList.add('hidden');
+                tabAdmin.classList.add('border-accent', 'text-accent');
+                tabAdmin.classList.remove('border-transparent', 'text-slate-500');
+                tabGuest.classList.add('border-transparent', 'text-slate-500');
+                tabGuest.classList.remove('border-accent', 'text-accent');
+            } else {
+                form.classList.add('hidden');
+                guest.classList.remove('hidden');
+                tabGuest.classList.add('border-accent', 'text-accent');
+                tabGuest.classList.remove('border-transparent', 'text-slate-500');
+                tabAdmin.classList.add('border-transparent', 'text-slate-500');
+                tabAdmin.classList.remove('border-accent', 'text-accent');
+            }
+        }
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+            if (u === 'uranusfazry' && p === 'uranusfazry123') {
+                loginSuccess('admin');
+            } else {
+                alert('Username atau Password salah!');
+            }
+        }
+
+        function enterAsGuest() { loginSuccess('guest'); }
+
+        function loginSuccess(role) {
+            currentUser = role;
+            document.getElementById('authSection').classList.add('hidden');
+            document.getElementById('appSection').classList.remove('hidden');
+            document.getElementById('appSection').classList.add('flex');
+            const adminElements = document.querySelectorAll('.admin-only');
+            adminElements.forEach(el => { el.style.display = role === 'admin' ? '' : 'none'; });
+            document.getElementById('roleLabelSidebar').textContent = role === 'admin' ? 'Administrator' : 'Tamu / Viewer';
+            
+            // <!-- PROFESSIONAL LOGIN NOTIFICATION FIX -->
+            showWelcomeNotification(role);
+            
+            showPage('alumni');
+            updateStats();
+        }
+
+        // <!-- PROFESSIONAL LOGIN NOTIFICATION FIX -->
+        function showWelcomeNotification(role) {
+            const isGuest = role !== 'admin';
+            
+            // Konfigurasi Konten & Visual Profesional
+            const config = isGuest ? {
+                // Tamu (Informatif & Sopan)
+                title: "Selamat Datang",
+                message: "Anda mengakses sistem sebagai Tamu. Seluruh data bersifat baca saja.",
+                footer: "Mode Tamu • Read Only",
+                icon: "ph-info",
+                
+                // Styling Tamu (Biru/Abu Profesional)
+                borderClass: "border-l-4 border-blue-500",
+                iconContainer: "bg-blue-50 text-blue-600",
+                titleColor: "text-slate-800",
+                textColor: "text-slate-500",
+                footerClass: "text-blue-700 bg-blue-50 border border-blue-100"
+            } : {
+                // Admin (Resmi, Aman, Eksklusif)
+                title: "Selamat Datang, Administrator",
+                message: "Akses berhasil diverifikasi. Anda kini masuk ke Sistem Informasi Alumni MIS PANATASAN.",
+                footer: "Mode Administrator • Akses Penuh",
+                icon: "ph-shield-check",
+                
+                // Styling Admin (Hijau/Slate Elegan)
+                borderClass: "border-l-4 border-emerald-600",
+                iconContainer: "bg-emerald-50 text-emerald-700",
+                titleColor: "text-slate-900",
+                textColor: "text-slate-600",
+                footerClass: "text-emerald-800 bg-emerald-50 border border-emerald-100"
+            };
+
+            const notificationId = 'toast-' + Date.now();
+            
+            // Struktur HTML Modern (Flex Horizontal, Padding Nyaman, Typography Seimbang)
+            const html = `
+                <div id="${notificationId}" class="toast-enter transform transition-all duration-300 ease-out bg-white shadow-xl rounded-lg border border-slate-200 ${config.borderClass} pointer-events-auto flex w-full max-w-sm overflow-hidden relative">
+                    
+                    <!-- Icon Section (Left) -->
+                    <div class="flex-shrink-0 p-4 flex items-start">
+                        <div class="${config.iconContainer} p-2.5 rounded-full flex items-center justify-center shadow-sm">
+                            <i class="ph ${config.icon} text-2xl"></i>
+                        </div>
+                    </div>
+
+                    <!-- Content Section (Right) -->
+                    <div class="flex-1 py-4 pr-10"> <!-- pr-10 agar tidak tertutup tombol close -->
+                        <h4 class="text-sm font-bold ${config.titleColor} leading-snug mb-1">
+                            ${config.title}
+                        </h4>
+                        <p class="text-xs ${config.textColor} leading-relaxed mb-3">
+                            ${config.message}
+                        </p>
+                        
+                        <!-- Footer Badge -->
+                        <span class="inline-flex items-center px-2.5 py-1 rounded text-[10px] font-semibold tracking-wide uppercase ${config.footerClass}">
+                            ${config.footer}
+                        </span>
+                    </div>
+
+                    <!-- Close Button (Absolute Top Right) -->
+                    <button onclick="document.getElementById('${notificationId}').remove()" class="absolute top-2 right-2 p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors focus:outline-none">
+                        <i class="ph ph-x text-lg"></i>
+                    </button>
+                </div>
+            `;
+
+            // Inject to Container
+            const container = document.getElementById('toastContainer');
+            if (container) {
+                container.innerHTML = html; // Ganti notifikasi lama jika ada (agar tidak menumpuk berlebihan)
+                
+                // Auto Close Logic (4 Detik)
+                setTimeout(() => {
+                    const el = document.getElementById(notificationId);
+                    if (el) {
+                        el.classList.remove('toast-enter');
+                        el.classList.add('toast-exit');
+                        el.addEventListener('animationend', () => el.remove());
+                    }
+                }, 4000);
+            }
+        }
+
+        function logout() {
+            currentUser = null;
+            document.getElementById('authSection').classList.remove('hidden');
+            document.getElementById('appSection').classList.add('hidden');
+            document.getElementById('appSection').classList.remove('flex');
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+        }
+
+        function showPage(pageId) {
+            document.querySelectorAll('.page-content').forEach(p => p.classList.add('hidden'));
+            document.querySelectorAll('.nav-item').forEach(b => {
+                b.classList.remove('bg-slate-800', 'text-white');
+                b.classList.add('text-slate-300');
+            });
+            if (pageId === 'dashboard') {
+                document.getElementById('page-dashboard').classList.remove('hidden');
+                updateStats();
+            } else if (pageId === 'settings') {
+                document.getElementById('page-settings').classList.remove('hidden');
+            } else {
+                document.getElementById('page-list').classList.remove('hidden');
+                currentView = pageId; 
+                document.getElementById('listTitle').textContent = 'Database Alumni';
+                renderTable();
+            }
+            const navs = document.querySelectorAll('.nav-item');
+            if(pageId === 'dashboard') navs[0].classList.add('bg-slate-800', 'text-white');
+            if(pageId === 'alumni') navs[1].classList.add('bg-slate-800', 'text-white');
+            if(pageId === 'settings') navs[2]?.classList.add('bg-slate-800', 'text-white');
+        }
+        
+        function toggleMobileMenu() { document.getElementById('mobileMenu').classList.add('hidden'); }
+
+        // --- CRUD OPERATIONS ---
+        
+        function openModal(id = null) {
+            const form = document.getElementById('dataForm');
+            form.reset();
+            document.getElementById('editId').value = '';
+            
+            // <!-- LINK ONLY & CUSTOM SCHOOL YEAR FEATURE: RESET URL INPUTS -->
+            // Fix ID mapping
+            const idMap = {
+                'ijazah': 'urlIjazah',
+                'sk': 'urlSK',
+                'skl': 'urlSKL',
+                'transkrip': 'urlTranskrip'
+            };
+
+            ['ijazah', 'sk', 'skl', 'transkrip'].forEach(key => {
+                document.getElementById(idMap[key]).value = '';
+            });
+
+            if (id) {
+                const data = db.students.find(s => s.id === id);
+                if (data) {
+                    document.getElementById('modalTitle').textContent = 'Edit Data: ' + data.name;
+                    document.getElementById('editId').value = data.id;
+                    document.getElementById('inpNis').value = data.nis;
+                    document.getElementById('inpNik').value = data.nik || '';
+                    document.getElementById('inpName').value = data.name;
+                    document.getElementById('inpBirthPlace').value = data.birthPlace || '';
+                    document.getElementById('inpBirthDate').value = data.birthDate || '';
+                    // <!-- LINK ONLY & CUSTOM SCHOOL YEAR FEATURE: POPULATE FREE TEXT SCHOOL YEAR -->
+                    document.getElementById('inpSchoolYear').value = data.schoolYear || '';
+                    
+                    if(data.files) {
+                        ['ijazah', 'sk', 'skl', 'transkrip'].forEach(key => {
+                            const fileData = data.files[key];
+                            // Use map
+                            const inputId = idMap[key];
+                            
+                            if (fileData) {
+                                // <!-- LINK ONLY & CUSTOM SCHOOL YEAR FEATURE: POPULATE URL INPUTS -->
+                                if (fileData.type === 'url' || fileData.type === 'imghippo') {
+                                    const input = document.getElementById(inputId);
+                                    if(input) input.value = fileData.url;
+                                }
+                            }
+                        });
+                    }
+                }
+            } else {
+                document.getElementById('modalTitle').textContent = 'Tambah Data Baru';
+                // Default value is empty or current year if preferred, leaving empty as per "Free Input"
+            }
+            document.getElementById('modalForm').classList.remove('hidden');
+        }
+
+        function closeModal() { document.getElementById('modalForm').classList.add('hidden'); }
+
+        function saveData(e) {
+            e.preventDefault();
+            const id = document.getElementById('editId').value;
+            
+            const newData = {
+                id: id || Date.now().toString(),
+                status: 'Alumni',
+                nis: document.getElementById('inpNis').value,
+                nik: document.getElementById('inpNik').value,
+                name: document.getElementById('inpName').value.toUpperCase(),
+                birthPlace: document.getElementById('inpBirthPlace').value.toUpperCase(),
+                birthDate: document.getElementById('inpBirthDate').value,
+                // <!-- LINK ONLY & CUSTOM SCHOOL YEAR FEATURE: SAVE FREE TEXT SCHOOL YEAR -->
+                schoolYear: document.getElementById('inpSchoolYear').value,
+                files: {} 
+            };
+
+            // <!-- LINK ONLY & CUSTOM SCHOOL YEAR FEATURE: MANUAL URL INPUT LOGIC -->
+            let urlFiles = {};
+            const idMap = {
+                'ijazah': 'urlIjazah',
+                'sk': 'urlSK',
+                'skl': 'urlSKL',
+                'transkrip': 'urlTranskrip'
+            };
+
+            ['ijazah', 'sk', 'skl', 'transkrip'].forEach(key => {
+                const inputId = idMap[key];
+                const inputEl = document.getElementById(inputId);
+                if (!inputEl) return;
+
+                const urlVal = inputEl.value.trim();
+                
+                if (urlVal) {
+                    // Validasi sederhana HTTPS
+                    if (!urlVal.startsWith('https://')) {
+                        alert('Peringatan: Link ' + key.toUpperCase() + ' harus diawali dengan https://');
+                        // return; 
+                    } else {
+                        urlFiles[key] = { type: 'url', url: urlVal };
+                    }
+                }
+            });
+
+            if (id) {
+                const existing = db.students.find(s => s.id === id);
+                // Merge existing files with new URLs. Existing Base64s are kept unless overwritten by new URL for same key.
+                newData.files = { ...existing.files, ...urlFiles };
+                const index = db.students.findIndex(s => s.id === id);
+                db.students[index] = newData;
+            } else {
+                newData.files = { ...urlFiles };
+                db.students.push(newData);
+            }
+
+            saveToLocalStorage();
+            closeModal();
+            // <!-- DYNAMIC SCHOOL YEAR FILTER: Update filter -->
+            populateYearFilter();
+            renderTable();
+            updateStats();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const filterYear = document.getElementById('filterYear').value;
+            const sortOption = document.getElementById('sortOption').value;
+            
+            const filtered = db.students.filter(s => {
+                const matchSearch = s.name.toLowerCase().includes(search) || s.nis.includes(search) || (s.nik && s.nik.includes(search));
+                // <!-- LINK ONLY & CUSTOM SCHOOL YEAR FEATURE: COMPATIBILITY FILTER -->
+                // If filter is empty, show all. If filter is set, match exactly. Custom years won't match drop down but won't error.
+                const matchYear = filterYear === '' || s.schoolYear === filterYear;
+                return matchSearch && matchYear;
+            });
+
+            filtered.sort((a, b) => {
+                if (sortOption === 'name_asc') return a.name.localeCompare(b.name);
+                if (sortOption === 'name_desc') return b.name.localeCompare(a.name);
+                if (sortOption === 'nis_asc') return a.nis.localeCompare(b.nis);
+                return 0;
+            });
+
+            tbody.innerHTML = '';
+            if (filtered.length === 0) {
+                document.getElementById('emptyState').classList.remove('hidden');
+            } else {
+                document.getElementById('emptyState').classList.add('hidden');
+                
+                filtered.forEach((item, index) => {
+                    const tr = document.createElement('tr');
+                    tr.className = "hover:bg-slate-50 border-b border-slate-100 transition";
+                    
+                    // <!-- IMGHIPPO EMBED & ZIP BACKUP FEATURE: BADGES UI -->
+                    let fileBadges = '';
+                    const docTypes = ['ijazah', 'sk', 'skl', 'transkrip'];
+                    
+                    docTypes.forEach(doctype => {
+                        if (item.files && item.files[doctype]) {
+                            const f = item.files[doctype];
+                            const isUrl = f.type === 'imghippo' || f.type === 'url';
+                            const colorClass = isUrl 
+                                ? 'bg-green-100 text-green-700 hover:bg-green-200 border border-green-200' 
+                                : 'bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200';
+                            
+                            const label = doctype.toUpperCase();
+                            fileBadges += `<button onclick="openPreview('${item.id}', '${doctype}')" class="text-[10px] font-bold px-2 py-1 rounded mr-1 mb-1 ${colorClass}">${label}</button>`;
+                        }
+                    });
+
+                    if (!fileBadges) fileBadges = '<span class="text-slate-300 text-xs italic">Belum ada arsip</span>';
+
+                    const actions = currentUser === 'admin' ? `
+                        <button onclick="openModal('${item.id}')" class="text-blue-600 hover:text-blue-800 p-1 bg-blue-50 rounded mr-1"><i class="ph ph-pencil-simple text-lg"></i></button>
+                        <button onclick="deleteData('${item.id}')" class="text-red-600 hover:text-red-800 p-1 bg-red-50 rounded"><i class="ph ph-trash text-lg"></i></button>
+                    ` : `<span class="text-[10px] text-slate-400">View Only</span>`;
+
+                    const birthInfo = (item.birthPlace && item.birthDate) ? `${item.birthPlace}, ${item.birthDate}` : '<span class="text-slate-300">-</span>';
+                    const nikInfo = item.nik ? item.nik : '<span class="text-slate-300 italic">Belum ada NIK</span>';
+                    
+                    // Badge Color Logic (Basic fallback for custom years)
+                    let badgeClass = "bg-slate-100 text-slate-800";
+                    if(item.schoolYear === "2020/2021") badgeClass = "bg-blue-300 text-blue-900";
+                    if(item.schoolYear === "2021/2022") badgeClass = "bg-blue-100 text-blue-800";
+                    if(item.schoolYear === "2022/2023") badgeClass = "bg-indigo-100 text-indigo-800";
+                    if(item.schoolYear === "2023/2024") badgeClass = "bg-violet-100 text-violet-800";
+                    if(item.schoolYear === "2024/2025") badgeClass = "bg-purple-100 text-purple-800";
+                    
+                    const schoolYearBadge = item.schoolYear ? `<span class="${badgeClass} text-xs px-2 py-1 rounded font-medium">${item.schoolYear}</span>` : '-';
+
+                    tr.innerHTML = `
+                        <td class="p-4 text-slate-500 font-mono text-xs">${index + 1}</td>
+                        <td class="p-4 font-bold text-slate-700 uppercase">${item.name}</td>
+                        <td class="p-4">
+                            <div class="text-xs font-mono text-slate-600">NISN: ${item.nis}</div>
+                            <div class="text-[10px] font-mono text-slate-500">NIK: ${nikInfo}</div>
+                        </td>
+                        <td class="p-4 text-xs text-slate-600 uppercase">${birthInfo}</td>
+                        <td class="p-4 text-center">${schoolYearBadge}</td>
+                        <td class="p-4 text-center max-w-[200px] flex flex-wrap justify-center">${fileBadges}</td>
+                        <td class="p-4 text-right">${actions}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+
+        function deleteData(id) {
+            if (confirm('Hapus data ini secara permanen?')) {
+                db.students = db.students.filter(s => s.id !== id);
+                saveToLocalStorage();
+                renderTable();
+                updateStats();
+            }
+        }
+
+        function saveToLocalStorage() {
+            db.lastUpdated = new Date().toISOString();
+            localStorage.setItem(DB_KEY, JSON.stringify(db));
+        }
+
+        function updateStats() {
+            const alumni = db.students.length;
+            const batch2021 = db.students.filter(s => s.schoolYear === '2020/2021').length;
+            const batch2122 = db.students.filter(s => s.schoolYear === '2021/2022').length;
+            const batch2223 = db.students.filter(s => s.schoolYear === '2022/2023').length;
+            const batch2324 = db.students.filter(s => s.schoolYear === '2023/2024').length;
+            const batch2425 = db.students.filter(s => s.schoolYear === '2024/2025').length;
+
+            document.getElementById('statTotal').innerText = alumni;
+            document.getElementById('stat2021').innerText = batch2021;
+            document.getElementById('stat2122').innerText = batch2122;
+            document.getElementById('stat2223').innerText = batch2223;
+            document.getElementById('stat2324').innerText = batch2324;
+            document.getElementById('stat2425').innerText = batch2425;
+        }
+
+        // <!-- IMGHIPPO EMBED & ZIP BACKUP FEATURE: PREVIEW MODAL LOGIC -->
+        function openPreview(id, type) {
+            const item = db.students.find(s => s.id === id);
+            const fileData = item.files[type];
+            if (!fileData) { alert('File tidak ditemukan.'); return; }
+
+            const modal = document.getElementById('previewModal');
+            const content = document.getElementById('previewContent');
+            const title = document.getElementById('previewTitle');
+            const dlBtn = document.getElementById('downloadBtn');
+
+            title.innerText = `Preview ${type.toUpperCase()} - ${item.name}`;
+            content.innerHTML = ''; // Reset
+
+            // <!-- DIRECT DOWNLOAD FEATURE: Logic Upgrade -->
+            const ext = (fileData.type === 'imghippo' || fileData.type === 'url')
+                ? fileData.url.split('.').pop().split('?')[0]
+                : 'jpg'; // default
+            const safeName = item.name.replace(/[^a-z0-9]/gi, '_');
+            const filename = `${safeName}_${type}.${ext}`;
+
+            // Reset button event listeners by cloning
+            const newDlBtn = dlBtn.cloneNode(true);
+            dlBtn.parentNode.replaceChild(newDlBtn, dlBtn);
+
+            // Configure button click for direct download
+            newDlBtn.onclick = (e) => {
+                e.preventDefault();
+                if (fileData.type === 'imghippo' || fileData.type === 'url') {
+                    downloadFileDirect(fileData.url, filename);
+                } else if (fileData.type === 'base64') {
+                    // Fallback for local base64
+                    const link = document.createElement('a');
+                    link.href = fileData.data;
+                    link.download = filename;
+                    link.click();
+                }
+            };
+            // Prevent default navigation
+            newDlBtn.href = '#';
+            newDlBtn.removeAttribute('target'); 
+
+            // Show Content
+            if (fileData.type === 'imghippo' || fileData.type === 'url') {
+                const url = fileData.url;
+                if(['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext.toLowerCase())) {
+                    content.innerHTML = `<img src="${url}" class="max-w-full max-h-[80vh] object-contain rounded shadow-lg">`;
+                } else {
+                    content.innerHTML = `<iframe src="${url}" class="w-full h-full border-0 rounded"></iframe>`;
+                }
+            } else if (fileData.type === 'base64') {
+                content.innerHTML = `<img src="${fileData.data}" class="max-w-full max-h-[80vh] object-contain rounded shadow-lg">`;
+            }
+            
+            modal.classList.remove('hidden');
+        }
+
+        function closePreview() {
+            document.getElementById('previewModal').classList.add('hidden');
+        }
+
+        // <!-- DIRECT DOWNLOAD FEATURE: Core Function -->
+        function downloadFileDirect(url, filename) {
+            const btn = document.getElementById('downloadBtn');
+            const originalContent = btn.innerHTML;
+            
+            // UI Feedback
+            btn.innerHTML = `<i class="loader w-3 h-3 border-2 border-white inline-block mr-1"></i> Loading...`;
+            btn.classList.add('opacity-75', 'cursor-not-allowed');
+
+            fetch(url)
+                .then(res => {
+                    if (!res.ok) throw new Error('Network response was not ok');
+                    return res.blob();
+                })
+                .then(blob => {
+                    const link = document.createElement('a');
+                    const blobUrl = URL.createObjectURL(blob);
+                    link.href = blobUrl;
+                    link.download = filename;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(blobUrl);
+                })
+                .catch(err => {
+                    console.error("Download error:", err);
+                    alert('Gagal mengunduh file. Kemungkinan diblokir oleh CORS atau file tidak ada.');
+                })
+                .finally(() => {
+                    // Reset UI
+                    btn.innerHTML = originalContent;
+                    btn.classList.remove('opacity-75', 'cursor-not-allowed');
+                });
+        }
+
+        // <!-- IMGHIPPO EMBED & ZIP BACKUP FEATURE: BACKUP LOGIC -->
+        async function backupToZip() {
+            const overlay = document.getElementById('loadingOverlay');
+            const loadingText = document.getElementById('loadingText');
+            overlay.classList.remove('hidden');
+            overlay.classList.add('flex');
+            loadingText.innerText = "Mempersiapkan ZIP...";
+
+            const zip = new JSZip();
+            
+            // 1. Add JSON Data
+            zip.file("data.json", JSON.stringify(db, null, 2));
+            
+            // 2. Add Files
+            const alumniFolder = zip.folder("alumni");
+            let fileCount = 0;
+            let successCount = 0;
+
+            // Collect all fetch promises
+            const downloadPromises = [];
+
+            for (const s of db.students) {
+                if (!s.files) continue;
+
+                // Create folder name: NAME_YEAR
+                const safeName = s.name.replace(/[^a-z0-9]/gi, '_').toUpperCase();
+                const safeYear = (s.schoolYear || 'UNKNOWN').replace('/', '-');
+                const studentFolder = alumniFolder.folder(`${safeName}_${safeYear}`);
+
+                for (const [docType, fileInfo] of Object.entries(s.files)) {
+                    fileCount++;
+                    
+                    if (fileInfo.type === 'imghippo' || fileInfo.type === 'url') {
+                        // Fetch remote file
+                        const p = fetch(fileInfo.url)
+                            .then(resp => {
+                                if (!resp.ok) throw new Error('Network error');
+                                return resp.blob();
+                            })
+                            .then(blob => {
+                                // Determine extension
+                                const ext = fileInfo.url.split('.').pop().split('?')[0] || 'jpg';
+                                studentFolder.file(`${docType}.${ext}`, blob);
+                                successCount++;
+                                loadingText.innerText = `Mengunduh... (${successCount} file selesai)`;
+                            })
+                            .catch(err => {
+                                console.warn(`Gagal unduh ${docType} untuk ${s.name}: ${err.message}`);
+                                studentFolder.file(`${docType}_ERROR.txt`, `Gagal unduh: ${fileInfo.url}\nError: ${err.message}`);
+                            });
+                        downloadPromises.push(p);
+                    } else if (fileInfo.type === 'base64') {
+                        // Handle base64
+                        try {
+                            const base64Data = fileInfo.data.split(',')[1];
+                            const ext = fileInfo.data.split(';')[0].split('/')[1] || 'png';
+                            studentFolder.file(`${docType}.${ext}`, base64Data, {base64: true});
+                            successCount++;
+                        } catch(e) { console.warn("Error saving base64"); }
+                    }
+                }
+            }
+
+            try {
+                // Wait for all downloads
+                await Promise.allSettled(downloadPromises);
+                
+                loadingText.innerText = "Mengompresi ZIP...";
+                const content = await zip.generateAsync({type:"blob"});
+                saveAs(content, "uranusfazry.zip");
+            } catch (err) {
+                alert("Terjadi kesalahan saat membuat backup: " + err.message);
+            } finally {
+                overlay.classList.add('hidden');
+                overlay.classList.remove('flex');
+            }
+        }
+
+        // <!-- IMGHIPPO EMBED & ZIP BACKUP FEATURE: RESTORE LOGIC -->
+        async function restoreFromZip() {
+            const input = document.getElementById('restoreZipFile');
+            const file = input.files[0];
+            if (!file) { alert('Pilih file ZIP dulu'); return; }
+
+            const overlay = document.getElementById('loadingOverlay');
+            overlay.classList.remove('hidden');
+            overlay.classList.add('flex');
+            document.getElementById('loadingText').innerText = "Mengekstrak Backup...";
+
+            try {
+                const zip = await JSZip.loadAsync(file);
+                
+                // Read JSON
+                const jsonFile = zip.file("data.json");
+                if (!jsonFile) throw new Error("File data.json tidak ditemukan dalam ZIP!");
+                
+                const jsonStr = await jsonFile.async("string");
+                const newData = JSON.parse(jsonStr);
+
+                // Validation check
+                if (!newData.students || !Array.isArray(newData.students)) {
+                    throw new Error("Format database tidak valid.");
+                }
+
+                // Restore
+                db = newData;
+                saveToLocalStorage();
+                
+                alert(`Restore Berhasil! ${db.students.length} data siswa dipulihkan.`);
+                location.reload();
+
+            } catch (err) {
+                alert("Gagal restore: " + err.message);
+            } finally {
+                overlay.classList.add('hidden');
+                overlay.classList.remove('flex');
+            }
+        }
+    </script>
+</body>
+</html>
